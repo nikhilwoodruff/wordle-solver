@@ -111,8 +111,8 @@ class Wordle:
 
 def main():
     ai = Wordle()
-    game = WordlePuzzle("tangy")
-    #ai = ai.simulate_guess("arose", game)
+    game = WordlePuzzle("rebus")
+    ai = ai.simulate_guess("arose", game)
     while ai.remaining_attempts > 0:
         guess, expected_score = ai.best_guess()
         print(f"Guess: {guess} (exp. speed-adjusted score = {round(expected_score)})")
