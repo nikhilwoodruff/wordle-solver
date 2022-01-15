@@ -1,5 +1,6 @@
 from typing import List, Tuple
 import requests
+from tqdm import tqdm
 
 class Result:
     GREEN = "Green"
@@ -28,6 +29,7 @@ CACHE = {}
 
 class Wordle:
     max_attempts = 6
+    trade_x_percent_win_chance_for_expected_step_faster = 1
     
     def __hash__(self):
         return hash(tuple(self.attempts))
@@ -41,6 +43,8 @@ class Wordle:
             self.wordlist = self._get_wordlist()
         else:
             self.wordlist = wordlist
+
+        self.step_score_multiplier = self.trade_x_percent_win_chance_for_expected_step_faster / 100
 
     
     def _get_wordlist(self):
@@ -68,7 +72,7 @@ class Wordle:
         attempt.narrow(guess, result)
         return attempt
 
-    def best_guess(self) -> str:
+    def best_guess(self, recursive: bool = False) -> str:
         if self in CACHE:
             return CACHE[self]
         if len(self.wordlist) == 1:
@@ -76,18 +80,24 @@ class Wordle:
         if self.remaining_attempts == 1:
             # One guess left, just pick the first possible word
             best_guess = self.wordlist[0]
-            expected_score = 1 / len(self.wordlist)
+            win_chance = 1 / len(self.wordlist)
+            num_attempts = self.max_attempts
+            expected_score = win_chance - num_attempts * self.step_score_multiplier
             CACHE[self] = (best_guess, expected_score)
             return best_guess, expected_score
         else:
             # At least one guess after - simulate all possible puzzles
             expected_score_of_guess = {}
-            for word in self.wordlist:
-                game = WordlePuzzle(word)
-                # Take guess and narrow down
-                attempt = self.simulate_guess(word, game)
-                best_guess_after, expected_score = attempt.best_guess()
-                expected_score_of_guess[word] = expected_score
+            wordlist = tqdm(self.wordlist, desc="Simulating guesses") if not recursive else self.wordlist
+            for guess in wordlist:
+                for answer in self.wordlist:
+                    game = WordlePuzzle(answer)
+                    # Take guess and narrow down
+                    attempt = self.simulate_guess(guess, game)
+                    _, expected_score = attempt.best_guess(recursive=True)
+                    if guess not in expected_score_of_guess:
+                        expected_score_of_guess[guess] = 0
+                    expected_score_of_guess[guess] += expected_score / len(self.wordlist)
             best_guess, expected_score = max(expected_score_of_guess.items(), key=lambda x: x[1])
             CACHE[self] = (best_guess, expected_score)
             return best_guess, expected_score
@@ -99,13 +109,13 @@ class Wordle:
             and all(map(lambda x: x[0] == x[1], zip(self.attempts, other.attempts)))
         )
 
-
-
-
-if __name__ == "__main__":
+def main():
     ai = Wordle()
-    game = WordlePuzzle()
+    game = WordlePuzzle("tangy")
+    #ai = ai.simulate_guess("arose", game)
     while ai.remaining_attempts > 0:
-        guess = ai.best_guess()[0]
-        print(f"Guess: {guess}")
+        guess, expected_score = ai.best_guess()
+        print(f"Guess: {guess} (exp. speed-adjusted score = {round(expected_score)})")
         ai = ai.simulate_guess(guess, game)
+
+main()
